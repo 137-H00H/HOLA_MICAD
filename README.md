@@ -1,97 +1,109 @@
-# HOLA_MICAD
+# HOLA
 
-### Interactive 3D aorta segmentation with simulated click corrections
+### Human–AI collaboration for aortic segmentation with quality feedback
 
-HOLA_MICAD is a Python research pipeline for segmenting the aorta in CT volumes. It combines a three-channel MONAI DynUNet with positive and negative click prompts, then measures how segmentation quality changes as simulated corrections are added.
+HOLA combines **3D segmentation, corrective clicks, and quality estimation** to help users inspect aortic masks, refine their boundaries, and decide when to stop.
 
-The repository brings together experiments on **dataset composition**, **interaction efficiency**, **click reliability**, and **segmentation completeness**, with MedSAM and MedSAM2 evaluation scripts for comparison.
-
-![HOLA workflow illustrated with CT input, an aortic segmentation overlay, and a cropped quality-network input](docs/images/hola-workflow.svg)
-
-*From CTA input to a predicted mask, quality estimation, and corrective feedback. The images come from slide 4 of the [HOLA viva presentation](docs/presentations/HOLA_Viva_Presentation.pptx); the diagram summarizes the framework presented there.*
-
-[Segmentation examples](#segmentation-examples) · [Prototype interface](#prototype-interface) · [Reported results](#results-presented-in-the-viva) · [Code usage](docs/usage.md)
+[Code usage](docs/usage.md) · [Viva presentation](docs/presentations/HOLA_Viva_Presentation.pptx) · [Data availability](#7-data-availability)
 
 ## Highlights
 
-- **Volume segmentation with click prompts:** normalized CT, positive clicks, and negative clicks form three input channels. Clicks are encoded as Gaussian signals.
-- **Controlled dataset experiments:** train on the base dataset, add optional datasets by size or a seeded random order, or sample a fixed-size training subset.
-- **Interactive evaluation:** report Dice, intersection over union (IoU), 95th-percentile Hausdorff distance (HD95), and inference time across correction counts.
-- **Interaction studies:** measure corrections needed to reach target Dice scores and test robustness to incorrect clicks.
-- **Completeness estimation:** train a separate 3D CNN to predict Dice from CT and predicted-mask crops, then select a stopping threshold on validation data.
-- **Research outputs:** export checkpoints, per-patient JSON records, plots, and LaTeX metric tables.
+- **Segment in 3D** with a MONAI DynUNet trained across multiple cohorts.
+- **Refine with human input:** positive clicks include tissue; negative clicks exclude it.
+- **Estimate quality** from the CT and predicted mask, without reference labels at inference.
 
-## Segmentation examples
+## 1. What is segmentation?
 
-### From an axial CT slice to an aorta mask
+Segmentation labels each **voxel**, the 3D equivalent of a pixel, as target anatomy or background. Together, these labels form a **mask** that can be overlaid on CT slices or viewed in 3D.
 
-| CT input | Segmentation overlay | Cropped region for quality assessment |
-| --- | --- | --- |
-| ![Axial abdominal CT input](docs/images/cta-input.png) | ![Same axial slice with the aorta highlighted in pink](docs/images/segmentation-overlay.png) | ![Enlarged CT region around the predicted aorta mask](docs/images/quality-input-crop.png) |
+![Animated explanation of a CT scan, a segmentation overlay, and a 3D structure](docs/images/segmentation-explained.gif)
 
-The pink overlay identifies the aortic region. The quality network receives CT and predicted-mask crops so it can estimate segmentation quality. These images illustrate the components; they do not show a measured before/after correction sequence.
+*The rotating anatomy is a separate illustration from the CT example. [Still image](docs/images/segmentation-explained-still.png).*
 
-![Three axial CT slices showing aortic segmentation overlays at different anatomical levels](docs/images/axial-segmentation-examples.png)
+## 2. What are we segmenting? The aorta
 
-*Slide 2: aortic overlays on three axial slices, illustrating how the target appears at different levels of the volume.*
+The **aorta** carries blood from the heart to the body. Its curved shape, branching vessels, and variable anatomy make consistent segmentation across slices challenging.
 
-### Segmentation across cohorts and correction steps
+<p align="center">
+<img src="docs/images/aorta-anatomy.gif" alt="Rotating aortic anatomy from the viva presentation" width="250">
+</p>
 
-[![Detailed comparison across six cohorts: ground truth, predictions at 1, 3, 5, and 10 clicks, and 3D aorta views](docs/images/segmentation-comparison-light.svg)](docs/images/segmentation-comparison-light.svg)
+![Aortic overlays at three levels of a CT volume](docs/images/axial-segmentation-examples.png)
 
-*Slide 9: examples from Base, SEGA, Dissection, CIS-UNet, AortaSeg60, and TBAD. Click the figure to inspect it at full size.*
+HOLA currently learns one **aortic foreground class** from prepared labels; individual branches are not separate output classes.
 
-**Reading the figure:** the first column shows the reference mask and the red region enlarged in the following columns. Blue contours mark ground truth; magenta contours mark HOLA predictions at **1, 3, 5, and 10 clicks**. The last column compares **initial (yellow)** and **final (green)** 3D predictions. The examples show both close agreement and remaining errors across different anatomy.
+## 3. The segmentation backbone: MONAI DynUNet
 
-The original figure is preserved at its embedded resolution of **945 × 1043 pixels**. A white background keeps its labels readable in dark mode. [Download the original PNG](docs/images/segmentation-comparison.png).
+**MONAI provides the framework; DynUNet provides the segmentation architecture.** HOLA trains this 3D encoder–decoder from scratch, using three input channels: **CT, positive clicks, and negative clicks**. Its output separates foreground from background. [Architecture reference](https://docs.monai.io/en/0.5.3/networks.html#dynunet).
 
-### Positive and negative corrections
+## 4. How HOLA adds human interaction and quality feedback
 
-![Two CT examples illustrating positive and negative click prompts](docs/images/positive-negative-clicks.png)
+HOLA connects prediction to **human review and correction**. A separate CNN estimates mask quality, supporting the decision to continue refining or finish review.
 
-*Slide 3: examples of corrective interaction. Positive clicks indicate foreground to include; negative clicks indicate regions to exclude. In the experiment scripts, these clicks are simulated from reference masks and prediction errors.*
+![Progressively revealed HOLA workflow with separate correction and finish-review branches](docs/images/hola-feedback.gif)
 
-### Preparing the segmentation target
+[View the complete flowchart](docs/images/hola-feedback-still.png).
 
-| Before preprocessing | After preprocessing |
-| --- | --- |
-| <img src="docs/images/aorta-before-preprocessing.png" alt="3D vascular segmentation before preprocessing, including branching vessels" height="300"> | <img src="docs/images/aorta-after-preprocessing.png" alt="3D aorta segmentation after preprocessing" height="300"> |
+Building on interactive methods such as [DeepEdit](https://docs.monai.io/en/1.4.0/applications.html), HOLA combines **click-driven volumetric segmentation with quality estimation and stopping feedback**.
 
-*Slide 5: the presentation's before/after preprocessing illustration. The preprocessing implementation is external to this checkout.*
+<details>
+<summary><strong>See the prototype interface</strong></summary>
 
-## Prototype interface
+![Axial and sagittal overlays with quality feedback](docs/images/prototype-quality-feedback.png)
 
-The viva presents a Streamlit prototype with linked CT views, mask overlays, click controls, and quality feedback. These screenshots document that prototype; its interface source is not included in this repository.
+![Coronal and 3D views with corrective click controls](docs/images/prototype-3d-view.png)
 
-![Prototype showing axial and sagittal segmentation overlays alongside an estimated completeness score](docs/images/prototype-quality-feedback.png)
+*Prototype screenshots from slide 7. The interface source is not included in this checkout.*
 
-*Slide 7: axial and sagittal views with a displayed quality estimate and stopping message. The score and threshold belong to the pictured demonstration.*
+</details>
 
-![Prototype showing a coronal segmentation overlay, positive and negative click controls, and a 3D aorta reconstruction](docs/images/prototype-3d-view.png)
+## 5. How I developed HOLA
 
-*Slide 7: coronal review, 3D reconstruction, and controls for adding, undoing, or clearing clicks.*
+### Stage A — Learn to segment and respond to corrections
 
-## Results presented in the viva
+I combined six cohorts, fixed patient-level splits, and trained on augmented 3D patches. Mixing click-free examples with simulated corrections teaches DynUNet both initial prediction and refinement.
 
-Slide 6 reports the following outcomes. These values are transcribed from the presentation, rather than reproduced by a run of this checkout.
+![Training steps appear in sequence: cohorts, preparation, patient split, patches, simulated corrections, and model training](docs/images/development-segmentation.gif)
 
-| Measure | Reported result |
-| --- | --- |
-| Dice, from 0 to 10 corrective clicks | **0.804 → 0.868** |
-| Correlation between predicted quality and true Dice | **r = 0.953** |
-| Quality prediction mean absolute error | **0.039** |
-| Mean clicks under the stopping policy | **1.03** |
+[Complete training flowchart](docs/images/development-segmentation-still.png).
 
-[![Robustness plots showing Dice at 10 clicks against click correctness and spatial click offset](docs/images/interaction-robustness.png)](docs/images/interaction-robustness.png)
+### Stage B — Learn to estimate quality
 
-*Slide 6: the left panel varies click correctness; the right panel varies spatial click offset relative to local vessel radius. The dashed line marks the presentation's baseline Dice of 0.804. The original plot labels are retained; in this checkout's main evaluator, zero corrections still includes initial seed prompts. The spatial-offset experiment is shown in the deck but has no dedicated script in this checkout.*
+A second CNN learns to predict Dice from CT and predicted-mask crops. Reference masks supply training targets; new predictions can be assessed without them. Validation data sets the feedback threshold.
 
-All presentation images are stored locally in [docs/images](docs/images). See the [image source notes](docs/images/README.md) for slide references and figure construction details.
+![Quality-training steps appear in sequence: predictions, crops, Dice targets, quality CNN, calibration, and human review](docs/images/development-quality.gif)
 
-## Using the code
+[Complete quality flowchart](docs/images/development-quality-still.png) · [Training parameters and threshold selection](docs/usage.md#method-details)
 
-See the [code usage guide](docs/usage.md) for setup, dataset configuration, training and evaluation commands, and a reference to the experiment scripts.
+The scripts implement training and evaluation; the viva demonstrates the complete interaction loop.
 
-## Project status
+## 6. How the datasets are preprocessed
 
-This repository provides the experiment implementation and visual results from the [viva presentation](docs/presentations/HOLA_Viva_Presentation.pptx). Raw benchmark outputs, trained checkpoints, the prototype interface source, a hosted demo, and a license file are not included in this checkout.
+Preparation brings different cohorts into a common CT-and-mask format. The presentation illustrates the aortic target before and after preprocessing:
+
+![The original before image appears first, followed by an arrow and the after image](docs/images/preprocessing-comparison.gif)
+
+*Original fixed views from slide 5. [Still comparison](docs/images/preprocessing-comparison-still.png).*
+
+The code loads prepared NIfTI pairs, merges nonzero labels into one foreground, normalizes CT intensity, and samples augmented patches. Quality training uses aligned CT/mask crops. Earlier dataset preparation is external to this checkout; its exact resampling and branch-selection procedure is not specified. [Implementation details](docs/usage.md#preprocessing-details).
+
+## 7. Data availability
+
+The viva lists **357 cases across six cohorts**. These are project cohort counts; scans and labels are obtained separately.
+
+| Cohort | Cases | Access |
+| --- | ---: | --- |
+| Base | 43 | Not distributed here; public/private status unconfirmed. |
+| SEGA | 55 | Public: [SEG.A.](https://multicenteraorta.grand-challenge.org/) / [AVT release](https://figshare.com/articles/dataset/Aortic_Vessel_Tree_AVT_CTA_Datasets_and_Segmentations/14806362). |
+| Dissection | 40 | Public: [dataset release](https://figshare.com/articles/dataset/Aortic_Dissection_Dataset_and_Segmentations/22269091). |
+| CIS-UNet | 59 | [Data agreement required](https://github.com/mirthAI/CIS-UNet#accessing-the-dataset). |
+| AortaSeg60 | 60 | Public: [Zenodo](https://zenodo.org/records/18147026); automated masks. |
+| TBAD | 100 | Public: [ImageTBAD](https://github.com/XiaoweiXu/Dataset_Type-B-Aortic-Dissection), distributed through Kaggle. |
+
+The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supplies automated labels rather than manually corrected expert masks.
+
+## Explore the project
+
+[Code usage and setup](docs/usage.md) · [Presentation](docs/presentations/HOLA_Viva_Presentation.pptx) · [Visual sources](docs/images/README.md)
+
+Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
