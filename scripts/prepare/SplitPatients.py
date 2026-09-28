@@ -1,4 +1,10 @@
 import numpy as np
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 from paths import LOCAL_RESULTS_DIR
 

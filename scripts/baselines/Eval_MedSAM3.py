@@ -9,6 +9,11 @@ MEDSAM2_DIR = "/gpfs/scratch/ec25141/medsam/MedSAM2"
 sys.path.insert(0, MEDSAM2_DIR)
 from sam2.build_sam import build_sam2_video_predictor_npz
 
+from pathlib import Path
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 from paths import LOCAL_RESULTS_DIR
 

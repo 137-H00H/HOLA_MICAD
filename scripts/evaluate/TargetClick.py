@@ -1,15 +1,19 @@
 import argparse
 import json
-import os
 import numpy as np
 import torch
-import SimpleITK as sitk
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from monai.transforms import SpatialPad
 from monai.networks.nets import DynUNet
-from scipy.ndimage import gaussian_filter, label as connected_components, distance_transform_edt, binary_erosion
+from scipy.ndimage import gaussian_filter, label as connected_components
+
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
 
 import aorta_data
 import Clicksim as click_sim
@@ -17,14 +21,13 @@ from paths import LOCAL_RESULTS_DIR
 
 RESULTS_DIR = str(LOCAL_RESULTS_DIR)
 SEED = 0
-N_CLICKS = 10
+MAX_CLICKS = 12
+TARGET_DICE_LEVELS = [0.70, 0.80, 0.85, 0.90, 0.95]
 PATCH_SIZE = (64, 128, 128)
 OVERLAP_RATIO = 0.5
 WINDOW_BATCH_SIZE = 16
 SIGMA = 3
 MIN_COMPONENT_VOXELS = 500
-
-CORRECT_RATES = [0.90, 0.70, 0.50, 0.30, 0.10, 0.00]
 
 
 def scale_intensity(vol, a_min=-175, a_max=250):
@@ -36,13 +39,6 @@ def load_patient_volume(patient):
     ct_norm = scale_intensity(ct)
     gt_bin = (gt > 0.5).astype(np.float32)
     return ct_norm, gt_bin
-
-
-def get_real_spacing(patient):
-    dataset_name, raw_id = patient.split("::", 1)
-    img_path, _ = aorta_data._patient_paths(dataset_name, raw_id)
-    img = sitk.ReadImage(img_path)
-    return img.GetSpacing()[::-1]
 
 
 def make_click_channel_3d(shape, clicks, sigma=SIGMA):
@@ -93,8 +89,6 @@ def dice_score(pred, gt):
 
 
 def filter_small_components(pred, min_voxels=MIN_COMPONENT_VOXELS):
-    """Keeps only the single largest connected component -- the aorta
-    trunk is one continuous structure."""
     if pred.sum() == 0:
         return pred
     labeled, n_components = connected_components(pred > 0.5)
@@ -182,57 +176,44 @@ def read_fixed_split(path):
     return splits
 
 
-def load_perfect_click_baseline(tag):
-    path = f"{RESULTS_DIR}/test_raw_results_{tag}.json"
-    if not os.path.exists(path):
-        raise FileNotFoundError(
-            f"Cannot find {path} -- run EvaluateTest.py with --tag {tag} first. "
-            f"The click-quality experiment reuses its 100%-correct baseline "
-            f"instead of recomputing it."
-        )
-    with open(path) as f:
-        records = json.load(f)
-
-    by_click = {}
-    for rec in records:
-        c = rec["n_clicks_requested"]
-        by_click.setdefault(c, []).append(rec["dice"])
-
-    baseline = {}
-    for c in range(N_CLICKS + 1):
-        vals = [d for d in by_click.get(c, []) if not np.isnan(d)]
-        baseline[c] = float(np.mean(vals)) if vals else float("nan")
-    return baseline
-
-
-def run_click_sequence_with_errors(net, ct_norm, gt_bin, device, rng, n_clicks, correct_rate):
+def evaluate_one_patient(net, patient, max_clicks, target_levels, device, rng):
+    ct_norm, gt_bin = load_patient_volume(patient)
     shape = ct_norm.shape
     mid_z = shape[0] // 2
     seed_2d = click_sim.initial_seed_click(gt_bin[mid_z], rng=rng)
     pos = [(mid_z, r, c) for r, c in seed_2d]
     neg = []
 
-    history = {}
-    pred = predict_volume(net, ct_norm, pos, neg, shape, device)
-    history[0] = {"dice": dice_score(pred, gt_bin)}
+    clicks_to_reach = {level: None for level in target_levels}
+    click_breakdown_at_target = {level: None for level in target_levels}
+    dice_history = []
 
-    for click_num in range(1, n_clicks + 1):
+    pred = predict_volume(net, ct_norm, pos, neg, shape, device)
+    d = dice_score(pred, gt_bin)
+    dice_history.append(d)
+    for level in target_levels:
+        if clicks_to_reach[level] is None and not np.isnan(d) and d >= level:
+            clicks_to_reach[level] = 0
+            click_breakdown_at_target[level] = {"positive": len(pos), "negative": len(neg)}
+
+    for click_num in range(1, max_clicks + 1):
         errors = np.abs(pred - gt_bin)
         best_z = int(errors.sum(axis=(1, 2)).argmax())
-        click, correct_ctype = click_sim.simulate_next_click(pred[best_z], gt_bin[best_z], rng=rng)
+        click, ctype = click_sim.simulate_next_click(pred[best_z], gt_bin[best_z], rng=rng)
         if click is None:
-            history[click_num] = history[click_num - 1]
-            continue
+            break
         row, col = click
-
-        is_wrong = rng.random() >= correct_rate
-        ctype = ("negative" if correct_ctype == "positive" else "positive") if is_wrong else correct_ctype
-
         (pos if ctype == "positive" else neg).append((best_z, row, col))
         pred = predict_volume(net, ct_norm, pos, neg, shape, device)
-        history[click_num] = {"dice": dice_score(pred, gt_bin)}
+        d = dice_score(pred, gt_bin)
+        dice_history.append(d)
+        print(f"    click {click_num}/{max_clicks} dice={d:.3f}", flush=True)
+        for level in target_levels:
+            if clicks_to_reach[level] is None and not np.isnan(d) and d >= level:
+                clicks_to_reach[level] = click_num
+                click_breakdown_at_target[level] = {"positive": len(pos), "negative": len(neg)}
 
-    return history
+    return clicks_to_reach, click_breakdown_at_target, dice_history
 
 
 def main():
@@ -240,84 +221,87 @@ def main():
     parser.add_argument("--model_path", required=True)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--split_path", default=f"{RESULTS_DIR}/patient_split_3d.txt")
-    parser.add_argument("--n_clicks", type=int, default=N_CLICKS)
+    parser.add_argument("--max_clicks", type=int, default=MAX_CLICKS)
     args = parser.parse_args()
-
-    print(f"loading perfect-click (100%) baseline from EvaluateTest.py's output for tag={args.tag}...")
-    baseline_100 = load_perfect_click_baseline(args.tag)
-    print(f"baseline loaded: dice@0={baseline_100[0]:.3f} dice@{args.n_clicks}={baseline_100[args.n_clicks]:.3f}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     net = load_checkpoint(args.model_path, device)
 
     splits = read_fixed_split(args.split_path)
     test_patients = splits["test"]
-    print(f"evaluating click-error robustness on {len(test_patients)} test patients, "
-          f"correct_rates={CORRECT_RATES} (plus reused 1.00 baseline)", flush=True)
+    print(f"evaluating clicks-to-target on {len(test_patients)} test patients, "
+          f"targets={TARGET_DICE_LEVELS}, max_clicks={args.max_clicks}", flush=True)
 
-    results = {rate: {c: [] for c in range(args.n_clicks + 1)} for rate in CORRECT_RATES}
+    rng = np.random.default_rng(SEED)
+    records = []
 
     for i, patient in enumerate(test_patients, 1):
         try:
-            ct_norm, gt_bin = load_patient_volume(patient)
+            clicks_to_reach, click_breakdown, dice_history = evaluate_one_patient(
+                net, patient, args.max_clicks, TARGET_DICE_LEVELS, device, rng)
+            records.append({"patient": patient, "clicks_to_reach": clicks_to_reach,
+                            "click_breakdown_at_target": click_breakdown,
+                            "dice_history": dice_history})
+            reached_090 = clicks_to_reach.get(0.90)
+            breakdown_090 = click_breakdown.get(0.90)
+            breakdown_str = f"pos={breakdown_090['positive']}/neg={breakdown_090['negative']}" if breakdown_090 else "n/a"
+            print(f"{i}/{len(test_patients)} {patient}: "
+                  f"clicks_to_0.90={'never' if reached_090 is None else reached_090} ({breakdown_str}) "
+                  f"final_dice={dice_history[-1]:.3f}", flush=True)
         except Exception as e:
-            print(f"{patient}: FAILED to load - {e}")
-            continue
+            print(f"{patient}: FAILED - {e}")
 
-        for rate in CORRECT_RATES:
-            rng = np.random.default_rng(SEED)
-            history = run_click_sequence_with_errors(net, ct_norm, gt_bin, device, rng,
-                                                      args.n_clicks, rate)
-            for c in range(args.n_clicks + 1):
-                results[rate][c].append(history[c]["dice"])
+    raw_out = f"{RESULTS_DIR}/clicks_to_target_raw_{args.tag}.json"
+    with open(raw_out, "w") as f:
+        json.dump(records, f, indent=2)
+    print(f"saved -> {raw_out}")
 
-        print(f"{i}/{len(test_patients)} {patient} done", flush=True)
+    print(f"\n=== Clicks needed to reach each target dice ===")
+    summary_rows = []
+    for level in TARGET_DICE_LEVELS:
+        reached = [r["clicks_to_reach"][level] for r in records if r["clicks_to_reach"][level] is not None]
+        n_never = len(records) - len(reached)
+        mean_clicks = float(np.mean(reached)) if reached else float("nan")
+        median_clicks = float(np.median(reached)) if reached else float("nan")
 
-    summary = {1.00: baseline_100}
-    for rate in CORRECT_RATES:
-        summary[rate] = {}
-        for c in range(args.n_clicks + 1):
-            vals = [d for d in results[rate][c] if not np.isnan(d)]
-            summary[rate][c] = float(np.mean(vals)) if vals else float("nan")
+        breakdowns = [r["click_breakdown_at_target"][level] for r in records
+                      if r["click_breakdown_at_target"][level] is not None]
+        mean_pos = float(np.mean([b["positive"] for b in breakdowns])) if breakdowns else float("nan")
+        mean_neg = float(np.mean([b["negative"] for b in breakdowns])) if breakdowns else float("nan")
 
-    all_rates = [1.00] + CORRECT_RATES
-
-    print("\n=== Click-error robustness results ===")
-    for rate in all_rates:
-        row = "  ".join(f"c{c}={summary[rate][c]:.3f}" for c in range(args.n_clicks + 1))
-        print(f"{int(rate*100)}% correct: {row}")
-
-    fig, ax = plt.subplots(figsize=(9, 6))
-    clicks = list(range(args.n_clicks + 1))
-    for rate in all_rates:
-        ys = [summary[rate][c] for c in clicks]
-        ax.plot(clicks, ys, "o-", linewidth=2, markersize=6, label=f"{int(rate*100)}% correct")
-    ax.set_xlabel("Number of clicks")
-    ax.set_ylabel("Mean Dice")
-    ax.set_title(f"Robustness to incorrect user clicks - {args.tag}")
-    ax.set_ylim(0, 1)
-    ax.legend(title="Click accuracy", loc="lower right")
-    ax.grid(True, alpha=0.3)
-    plt.tight_layout()
-    out_path = f"{RESULTS_DIR}/click_error_robustness_{args.tag}.png"
-    plt.savefig(out_path, dpi=120)
-    plt.close()
-    print(f"saved -> {out_path}")
+        print(f"dice>={level:.2f}: mean_clicks={mean_clicks:.2f} median_clicks={median_clicks:.1f} "
+              f"reached={len(reached)}/{len(records)} never_reached={n_never} "
+              f"(mean_positive={mean_pos:.1f} mean_negative={mean_neg:.1f})")
+        summary_rows.append((level, mean_clicks, median_clicks, len(reached), n_never))
 
     latex_lines = [r"\begin{table}[h]", r"\centering",
-                   f"\\caption{{Robustness to incorrect clicks - {args.tag}}}",
-                   "\\begin{tabular}{l" + "c" * (args.n_clicks + 1) + "}", r"\toprule"]
-    header = ["\\% Correct clicks"] + [f"c={c}" for c in clicks]
-    latex_lines.append(" & ".join(header) + r" \\")
-    latex_lines.append(r"\midrule")
-    for rate in all_rates:
-        row = [f"{int(rate*100)}\\%"] + [f"{summary[rate][c]:.3f}" for c in clicks]
-        latex_lines.append(" & ".join(row) + r" \\")
+                   f"\\caption{{Clicks needed to reach target Dice - {args.tag}}}",
+                   r"\begin{tabular}{lcccc}", r"\toprule",
+                   r"Target Dice & Mean Clicks & Median Clicks & Reached & Never Reached \\", r"\midrule"]
+    for level, mean_c, median_c, n_reached, n_never in summary_rows:
+        latex_lines.append(f"{level:.2f} & {mean_c:.2f} & {median_c:.1f} & "
+                           f"{n_reached}/{len(records)} & {n_never} \\\\")
     latex_lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
-    latex_out = f"{RESULTS_DIR}/click_error_robustness_table_{args.tag}.tex"
+    latex_out = f"{RESULTS_DIR}/clicks_to_target_table_{args.tag}.tex"
     with open(latex_out, "w") as f:
         f.write("\n".join(latex_lines))
     print(f"saved -> {latex_out}")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    levels = [row[0] for row in summary_rows]
+    means = [row[1] for row in summary_rows]
+    ax.bar([str(l) for l in levels], means, color="tab:blue", alpha=0.8)
+    ax.set_xlabel("Target Dice")
+    ax.set_ylabel("Mean clicks needed")
+    ax.set_title(f"Clicks needed to reach target Dice - {args.tag}")
+    ax.grid(True, alpha=0.3, axis="y")
+    for i, m in enumerate(means):
+        ax.annotate(f"{m:.1f}", (i, m), textcoords="offset points", xytext=(0, 5), ha="center")
+    plt.tight_layout()
+    out_path = f"{RESULTS_DIR}/clicks_to_target_{args.tag}.png"
+    plt.savefig(out_path, dpi=120)
+    plt.close()
+    print(f"saved -> {out_path}")
 
 
 if __name__ == "__main__":

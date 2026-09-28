@@ -14,6 +14,12 @@ from monai.transforms import Compose, SpatialPad, SpatialPadd, RandCropByPosNegL
 from monai.utils import set_determinism
 from scipy.ndimage import gaussian_filter, label as connected_components
 
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 import Clicksim as click_sim
 from paths import LOCAL_RESULTS_DIR
@@ -37,20 +43,15 @@ RESULTS_DIR = str(LOCAL_RESULTS_DIR)
 SPLIT_OUT   = f"{RESULTS_DIR}/patient_split_3d.txt"
 
 USE_WANDB     = True
-WANDB_PROJECT = "SUB"
+WANDB_PROJECT = "RDM"
 
-OPTIONAL_DATASETS = {
+DATASET_LOADERS = {
     "sega":       aorta_data.list_sega_patients,
     "dissection": aorta_data.list_dissection_patients,
     "cisunet":    aorta_data.list_cisunet_patients,
     "aortaseg60": aorta_data.list_aortaseg60_patients,
     "tbad":       aorta_data.list_tbad_patients,
 }
-
-
-def get_incremental_order():
-    counts = {name: len(loader()) for name, loader in OPTIONAL_DATASETS.items()}
-    return sorted(counts, key=lambda name: counts[name])
 
 
 def elapsed(start, device=None):
@@ -282,6 +283,13 @@ def read_fixed_split(path):
     return splits
 
 
+def get_random_dataset_order(order_seed):
+    names = list(DATASET_LOADERS.keys())
+    order_rng = np.random.default_rng(order_seed)
+    order_rng.shuffle(names)
+    return names
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr",      type=float, default=DEFAULT_LR)
@@ -290,9 +298,8 @@ def main():
     parser.add_argument("--patch_d", type=int,   default=PATCH_SIZE[0])
     parser.add_argument("--patch_h", type=int,   default=PATCH_SIZE[1])
     parser.add_argument("--patch_w", type=int,   default=PATCH_SIZE[2])
-    parser.add_argument("--stage", type=int, default=None)
-    parser.add_argument("--subset_size", type=int, default=None)
-    parser.add_argument("--subset_seed", type=int, default=0)
+    parser.add_argument("--order_seed", type=int, required=True)
+    parser.add_argument("--stage", type=int, required=True)
     args = parser.parse_args()
 
     patch_dhw = (args.patch_d, args.patch_h, args.patch_w)
@@ -313,38 +320,25 @@ def main():
     device_name = torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU"
     print(f"device={device} ({device_name})", flush=True)
 
-    if args.subset_size is not None:
-        included = []
-        print(f"subset_size={args.subset_size} mode -- pooling all patients directly, "
-              f"incremental ordering not used", flush=True)
-    else:
-        incremental_order = get_incremental_order()
-        included = incremental_order[:args.stage] if args.stage is not None else []
-        print(f"incremental_order={incremental_order}  stage={args.stage}  included={included}", flush=True)
+    dataset_order = get_random_dataset_order(args.order_seed)
+    included = dataset_order[:args.stage]
+    print(f"order_seed={args.order_seed}  full_random_order={dataset_order}  "
+          f"stage={args.stage}  included_this_stage={included}", flush=True)
+
+    descriptive_tag = f"{args.tag}_{'-'.join(included)}" if included else args.tag
 
     if USE_WANDB:
         config = vars(args)
-        if args.subset_size is None:
-            config["incremental_order"] = incremental_order
-            config["included"] = included
-        wandb.init(project=WANDB_PROJECT, name=args.tag, config=config,
+        config["dataset_order"] = dataset_order
+        config["included_this_stage"] = included
+        wandb.init(project=WANDB_PROJECT, name=descriptive_tag, config=config,
                    settings=wandb.Settings(init_timeout=120))
 
     fixed_split = read_fixed_split(SPLIT_OUT)
 
-    if args.subset_size is not None:
-        full_pool = aorta_data.list_all_usable_patients()
-        for loader in OPTIONAL_DATASETS.values():
-            full_pool += loader()
-        held_out = set(fixed_split["val"]) | set(fixed_split["test"])
-        pool = [p for p in full_pool if p not in held_out]
-        subset_rng = np.random.default_rng(args.subset_seed)
-        subset_rng.shuffle(pool)
-        all_patients = pool[:args.subset_size]
-    else:
-        all_patients = aorta_data.list_all_usable_patients()
-        for name in included:
-            all_patients += OPTIONAL_DATASETS[name]()
+    all_patients = aorta_data.list_all_usable_patients()
+    for name in included:
+        all_patients += DATASET_LOADERS[name]()
 
     stage_patients = set(all_patients)
     splits = {

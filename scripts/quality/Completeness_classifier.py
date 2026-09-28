@@ -4,6 +4,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 from paths import LOCAL_RESULTS_DIR
 
 RESULTS_DIR = str(LOCAL_RESULTS_DIR)

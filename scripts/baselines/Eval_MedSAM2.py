@@ -11,6 +11,11 @@ sys.path.insert(0, MEDSAM2_DIR)
 from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
+from pathlib import Path
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 import Clicksim as click_sim
 from paths import LOCAL_RESULTS_DIR

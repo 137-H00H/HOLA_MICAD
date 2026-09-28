@@ -8,6 +8,11 @@ from scipy.ndimage import distance_transform_edt, binary_erosion
 sys.path.insert(0, "/gpfs/scratch/ec25141/medsam/MedSAM")
 from segment_anything import sam_model_registry
 
+from pathlib import Path
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 from paths import LOCAL_RESULTS_DIR
 

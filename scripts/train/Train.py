@@ -11,8 +11,15 @@ import wandb
 from monai.networks.nets import DynUNet
 from monai.losses import DiceCELoss
 from monai.transforms import Compose, SpatialPad, SpatialPadd, RandCropByPosNegLabeld, ResizeWithPadOrCrop
+from monai.data import Dataset, CacheDataset
 from monai.utils import set_determinism
 from scipy.ndimage import gaussian_filter, label as connected_components
+
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
 
 import aorta_data
 import Clicksim as click_sim
@@ -32,20 +39,26 @@ OVERLAP_RATIO          = 0.5
 LOAD_WORKERS           = 4
 WINDOW_BATCH_SIZE      = 16
 VAL_CORRECTIONS        = 3
+FULL_VAL_CORRECTIONS   = 10
 
 RESULTS_DIR = str(LOCAL_RESULTS_DIR)
 SPLIT_OUT   = f"{RESULTS_DIR}/patient_split_3d.txt"
 
 USE_WANDB     = True
-WANDB_PROJECT = "RDM"
+WANDB_PROJECT = "INC"
 
-DATASET_LOADERS = {
+OPTIONAL_DATASETS = {
     "sega":       aorta_data.list_sega_patients,
     "dissection": aorta_data.list_dissection_patients,
     "cisunet":    aorta_data.list_cisunet_patients,
     "aortaseg60": aorta_data.list_aortaseg60_patients,
     "tbad":       aorta_data.list_tbad_patients,
 }
+
+
+def get_incremental_order():
+    counts = {name: len(loader()) for name, loader in OPTIONAL_DATASETS.items()}
+    return sorted(counts, key=lambda name: counts[name])
 
 
 def elapsed(start, device=None):
@@ -156,6 +169,22 @@ def build_dynunet_3d(device):
     return net.to(device)
 
 
+MIN_COMPONENT_VOXELS = 500
+
+
+def filter_small_components(pred, min_voxels=MIN_COMPONENT_VOXELS):
+    if pred.sum() == 0:
+        return pred
+    labeled, n_components = connected_components(pred > 0.5)
+    if n_components <= 1:
+        return pred
+    sizes = np.bincount(labeled.ravel())
+    sizes[0] = 0
+    keep_labels = np.where(sizes >= min_voxels)[0]
+    filtered = np.isin(labeled, keep_labels).astype(pred.dtype)
+    return filtered
+
+
 def dice_score(pred, gt):
     pred  = (pred > 0.5).astype(np.float32)
     gt    = (gt   > 0.5).astype(np.float32)
@@ -173,6 +202,63 @@ def iou_score(pred, gt):
     if union == 0:
         return float("nan")
     return float(intersection / union)
+
+
+def predict_volume(net, ct_norm, pos_clicks, neg_clicks, shape, device,
+                   patch_dhw=PATCH_SIZE, overlap=OVERLAP_RATIO):
+    D0, H0, W0 = shape
+    pd, ph, pw = patch_dhw
+
+    pad_d = max(0, pd - D0)
+    pad_h = max(0, ph - H0)
+    pad_w = max(0, pw - W0)
+    if pad_d or pad_h or pad_w:
+        padder = SpatialPad(spatial_size=(max(pd, D0), max(ph, H0), max(pw, W0)), mode="constant")
+        ct_norm = np.asarray(padder(ct_norm[None]))[0]
+
+    D, H, W = ct_norm.shape
+    sd = max(1, int(pd * (1 - overlap)))
+    sh = max(1, int(ph * (1 - overlap)))
+    sw = max(1, int(pw * (1 - overlap)))
+
+    pred_acc   = np.zeros((D, H, W), dtype=np.float32)
+    weight_acc = np.zeros((D, H, W), dtype=np.float32)
+
+    gz = np.exp(-((np.linspace(-1, 1, pd)) ** 2) / 0.5)
+    gy = np.exp(-((np.linspace(-1, 1, ph)) ** 2) / 0.5)
+    gx = np.exp(-((np.linspace(-1, 1, pw)) ** 2) / 0.5)
+    weight_map = gz[:, None, None] * gy[None, :, None] * gx[None, None, :]
+
+    windows = []
+    for z in range(0, max(1, D - pd + 1), sd):
+        z = min(z, D - pd)
+        for y in range(0, max(1, H - ph + 1), sh):
+            y = min(y, H - ph)
+            for x in range(0, max(1, W - pw + 1), sw):
+                x = min(x, W - pw)
+                ct_patch = ct_norm[z:z+pd, y:y+ph, x:x+pw]
+                pos_patch = [(cz-z, cy-y, cx-x) for (cz, cy, cx) in pos_clicks
+                             if z <= cz < z+pd and y <= cy < y+ph and x <= cx < x+pw]
+                neg_patch = [(cz-z, cy-y, cx-x) for (cz, cy, cx) in neg_clicks
+                             if z <= cz < z+pd and y <= cy < y+ph and x <= cx < x+pw]
+                windows.append(((z, y, x), build_input_3d(
+                    ct_patch, pos_patch, neg_patch, ct_patch.shape)))
+
+    net.eval()
+    with torch.no_grad():
+        for start in range(0, len(windows), WINDOW_BATCH_SIZE):
+            window_batch = windows[start:start + WINDOW_BATCH_SIZE]
+            t = torch.from_numpy(np.stack([window[1] for window in window_batch])).float().to(device)
+            with torch.autocast(device_type=device.type, dtype=torch.bfloat16,
+                                enabled=device.type == "cuda"):
+                out = net(t)
+            probabilities = torch.softmax(out, dim=1)[:, 1].float().cpu().numpy()
+            for ((z, y, x), _), prob in zip(window_batch, probabilities):
+                pred_acc[z:z+pd, y:y+ph, x:x+pw] += prob * weight_map
+                weight_acc[z:z+pd, y:y+ph, x:x+pw] += weight_map
+
+    pred = (pred_acc / np.maximum(weight_acc, 1e-8) > 0.5).astype(np.float32)
+    return pred[:D0, :H0, :W0]
 
 
 def load_patient_patches(patient, patch_transform, rng, augment=False, volume=None):
@@ -277,13 +363,6 @@ def read_fixed_split(path):
     return splits
 
 
-def get_random_dataset_order(order_seed):
-    names = list(DATASET_LOADERS.keys())
-    order_rng = np.random.default_rng(order_seed)
-    order_rng.shuffle(names)
-    return names
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--lr",      type=float, default=DEFAULT_LR)
@@ -292,8 +371,11 @@ def main():
     parser.add_argument("--patch_d", type=int,   default=PATCH_SIZE[0])
     parser.add_argument("--patch_h", type=int,   default=PATCH_SIZE[1])
     parser.add_argument("--patch_w", type=int,   default=PATCH_SIZE[2])
-    parser.add_argument("--order_seed", type=int, required=True)
-    parser.add_argument("--stage", type=int, required=True)
+    parser.add_argument("--stage", type=int, default=None,
+                        help="how many optional datasets to include, ordered smallest to "
+                             "largest by current patient count (0 = base only)")
+    parser.add_argument("--subset_size", type=int, default=None)
+    parser.add_argument("--subset_seed", type=int, default=0)
     args = parser.parse_args()
 
     patch_dhw = (args.patch_d, args.patch_h, args.patch_w)
@@ -314,25 +396,32 @@ def main():
     device_name = torch.cuda.get_device_name(0) if device.type == "cuda" else "CPU"
     print(f"device={device} ({device_name})", flush=True)
 
-    dataset_order = get_random_dataset_order(args.order_seed)
-    included = dataset_order[:args.stage]
-    print(f"order_seed={args.order_seed}  full_random_order={dataset_order}  "
-          f"stage={args.stage}  included_this_stage={included}", flush=True)
-
-    descriptive_tag = f"{args.tag}_{'-'.join(included)}" if included else args.tag
+    incremental_order = get_incremental_order()
+    included = incremental_order[:args.stage] if args.stage is not None else []
+    print(f"incremental_order={incremental_order}  stage={args.stage}  included={included}", flush=True)
 
     if USE_WANDB:
         config = vars(args)
-        config["dataset_order"] = dataset_order
-        config["included_this_stage"] = included
-        wandb.init(project=WANDB_PROJECT, name=descriptive_tag, config=config,
+        config["incremental_order"] = incremental_order
+        config["included"] = included
+        wandb.init(project=WANDB_PROJECT, name=args.tag, config=config,
                    settings=wandb.Settings(init_timeout=120))
 
     fixed_split = read_fixed_split(SPLIT_OUT)
 
-    all_patients = aorta_data.list_all_usable_patients()
-    for name in included:
-        all_patients += DATASET_LOADERS[name]()
+    if args.subset_size is not None:
+        full_pool = aorta_data.list_all_usable_patients()
+        for loader in OPTIONAL_DATASETS.values():
+            full_pool += loader()
+        held_out = set(fixed_split["val"]) | set(fixed_split["test"])
+        pool = [p for p in full_pool if p not in held_out]
+        subset_rng = np.random.default_rng(args.subset_seed)
+        subset_rng.shuffle(pool)
+        all_patients = pool[:args.subset_size]
+    else:
+        all_patients = aorta_data.list_all_usable_patients()
+        for name in included:
+            all_patients += OPTIONAL_DATASETS[name]()
 
     stage_patients = set(all_patients)
     splits = {
@@ -361,18 +450,23 @@ def main():
     epochs_no_improve = 0
 
     for epoch in range(args.epochs):
+        epoch_start = time.perf_counter()
+        patch_load_start = time.perf_counter()
         train_data = []
-        for p in splits["train"]:
+        for patient_index, p in enumerate(splits["train"], 1):
             try:
                 train_data.extend(load_patient_patches(p, patch_transform, rng, augment=True))
             except Exception as e:
                 print(f"skip train {p}: {e}")
         rng.shuffle(train_data)
+        patch_load_seconds = time.perf_counter() - patch_load_start
 
         net.train()
         epoch_loss, n_batches = 0.0, 0
 
         for b_start in range(0, len(train_data), BATCH_SIZE):
+            batch_start = time.perf_counter()
+            click_seconds = 0.0
             batch = train_data[b_start:b_start + BATCH_SIZE]
             inputs = [None] * len(batch)
             interactive_indices = [index for index in range(len(batch))
@@ -382,11 +476,13 @@ def main():
                     inputs[index] = build_input_3d(ct_norm, [], [], ct_norm.shape)
             if interactive_indices:
                 net.eval()
+                click_start = time.perf_counter()
                 interactive_volumes = [batch[index][0] for index in interactive_indices]
                 interactive_labels = [batch[index][1] for index in interactive_indices]
                 positive, negative, _ = simulate_clicks_batch(
                     net, interactive_volumes, interactive_labels, device, rng,
                     MAX_TRAIN_CORRECTIONS)
+                click_seconds = elapsed(click_start, device)
                 net.train()
                 for local_index, batch_index in enumerate(interactive_indices):
                     volume = batch[batch_index][0]
@@ -394,20 +490,25 @@ def main():
                         volume, positive[local_index], negative[local_index], volume.shape)
             targets = [gt_bin[None] for _, gt_bin in batch]
 
+            transfer_start = time.perf_counter()
             x = torch.from_numpy(np.stack(inputs)).float().to(device)
             y = torch.from_numpy(np.stack(targets)).long().to(device)
+            transfer_seconds = elapsed(transfer_start, device)
+            step_start = time.perf_counter()
             optim.zero_grad()
             with torch.autocast(device_type=device.type, dtype=torch.bfloat16,
                                 enabled=device.type == "cuda"):
                 loss = loss_fn(net(x), y)
             loss.backward()
             optim.step()
+            step_seconds = elapsed(step_start, device)
             epoch_loss += loss.item()
             n_batches  += 1
 
         avg_loss = epoch_loss / max(n_batches, 1)
 
         net.eval()
+        val_start = time.perf_counter()
         val_dices, val_ious = [], []
         for val_start_index in range(0, len(val_data), BATCH_SIZE):
             panel_batch = val_data[val_start_index:val_start_index + BATCH_SIZE]

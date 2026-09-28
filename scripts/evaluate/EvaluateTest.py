@@ -12,6 +12,12 @@ from monai.transforms import SpatialPad
 from monai.networks.nets import DynUNet
 from scipy.ndimage import gaussian_filter, label as connected_components, distance_transform_edt, binary_erosion
 
+from pathlib import Path
+import sys
+
+# Locate shared utilities when this script is run directly.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "core"))
+
 import aorta_data
 import Clicksim as click_sim
 from paths import LOCAL_RESULTS_DIR
