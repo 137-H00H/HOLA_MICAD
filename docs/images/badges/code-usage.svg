@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="197" height="32" viewBox="0 0 197 32" role="img" aria-label="CODE USAGE: GUIDE">
+  <title>CODE USAGE: GUIDE</title>
+  <defs><clipPath id="rounded"><rect width="197" height="32" rx="7"/></clipPath></defs>
+  <g clip-path="url(#rounded)">
+    <rect width="197" height="32" fill="#18273d"/>
+    <rect x="133" width="64" height="32" fill="#246aa8"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="m13 10-5 6 5 6m7-12 5 6-5 6m-3-15-3 18"/></g>
+  <g fill="#fff" font-family="Verdana,DejaVu Sans,sans-serif" font-size="10" font-weight="bold" letter-spacing="0.3">
+    <text x="35" y="20">CODE USAGE</text>
+    <text x="165" y="20" text-anchor="middle">GUIDE</text>
+  </g>
+</svg>

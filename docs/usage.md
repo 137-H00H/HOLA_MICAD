@@ -6,7 +6,7 @@ This guide covers configuration and running the existing experiment scripts. Run
 
 ## Project structure
 
-The code and usage documentation are organized as follows. Image assets are grouped for readability.
+The code, research paper, and usage documentation are organized as follows. Image assets are grouped for readability.
 
 ```text
 HOLA_MICAD/
@@ -33,6 +33,7 @@ HOLA_MICAD/
 │       ├── Eval_MedSAM2.py           # MedSAM2 slice evaluation
 │       └── Eval_MedSAM3.py           # MedSAM2 volume propagation
 └── docs/
+    ├── HOLA.pdf                      # Research paper
     ├── usage.md                      # Setup, commands, and method details
     └── images/                       # Figures, animations, and stills
 ```

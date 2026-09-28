@@ -2,9 +2,12 @@
 
 ### Human–AI collaboration for aortic segmentation with quality feedback
 
-HOLA combines **3D segmentation, corrective clicks, and quality estimation** to help users inspect aortic masks, refine their boundaries, and decide when to stop.
+[![Research paper PDF](docs/images/badges/research-paper.svg)](docs/HOLA.pdf)
+[![Code usage guide](docs/images/badges/code-usage.svg)](docs/usage.md)
+[![Project structure tree](docs/images/badges/project-structure.svg)](docs/usage.md#project-structure)
+[![Dataset availability and access](docs/images/badges/data-availability.svg)](#7-data-availability)
 
-[Code usage](docs/usage.md) · [Data availability](#7-data-availability)
+HOLA combines **3D segmentation, corrective clicks, and quality estimation** to help users inspect aortic masks, refine their boundaries, and decide when to stop.
 
 ## Highlights
 
@@ -104,6 +107,6 @@ The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supp
 
 ## Explore the project
 
-[Code usage and setup](docs/usage.md) · [Project structure](docs/usage.md#project-structure)
+[Research paper (PDF)](docs/HOLA.pdf) · [Code usage and setup](docs/usage.md) · [Project structure](docs/usage.md#project-structure)
 
 Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
