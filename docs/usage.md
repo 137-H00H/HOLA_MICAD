@@ -153,6 +153,47 @@ CT intensities are clipped to `[-175, 250]` and scaled to `[0, 1]`. Training use
 
 The image-based framework diagram is in the [project showcase](../README.md). The diagram here maps the training and evaluation scripts available in this checkout. Clicks are simulated using reference masks and prediction errors.
 
+## Method details
+
+These settings describe the checked-in scripts. The [project showcase](../README.md) provides the visual overview.
+
+### Segmentation training
+
+| Setting | Implementation |
+| --- | --- |
+| Patient split | Seed `0`; approximately 60% training, 20% validation, 20% test. Validation and test patients stay fixed across training-pool selections. |
+| Training patches | Four `64 x 128 x 128` patches per patient. |
+| Interaction sampling | Each sample has a 40% chance of empty click channels; remaining samples receive initial seed prompts and three simulated correction rounds. |
+| Prompt encoding | Separate positive and negative Gaussian signals. |
+| Backbone | 3D DynUNet, residual convolution blocks, instance normalization, three input channels, two output channels. |
+| Optimization | Dice plus cross-entropy loss, Adam, and a cosine learning-rate schedule. |
+| Checkpoint selection | Best validation Dice; early stopping after 15 epochs without improvement. |
+
+During simulation, the reference mask identifies missed or excess foreground and determines positive or negative corrections. Each dataset experiment trains a new model from scratch. The variants compare optional datasets ordered by size, datasets in a seeded random order, and fixed-size patient subsets.
+
+### Quality estimation and threshold selection
+
+1. Generate segmentation examples at multiple correction counts from training and validation patients. Test-split extraction is refused.
+2. Crop CT and predicted masks with a 20-voxel context margin and resize both channels to `96 x 96 x 96`.
+3. Calculate the actual Dice against each reference mask to create quality targets.
+4. Train a separate CNN with four convolution blocks, global average pooling, and a sigmoid output using mean squared error. Its generated samples are split by patient for training and validation.
+5. Search validation thresholds for the greatest stopping coverage while meeting a 90% precision criterion for an acceptable Dice of `0.85`. If none meets the criterion, use the strictest candidate and report a warning.
+
+At inference, the quality model takes only CT and predicted-mask inputs. Reference masks are required to create training targets and evaluate performance, but not to predict quality on a new scan.
+
+### Preprocessing details
+
+| Step | Operation |
+| --- | --- |
+| Load prepared volumes | Read paired NIfTI CT and label files with SimpleITK. |
+| Unify foreground | Convert all nonzero prepared labels into a binary mask. |
+| Normalize intensity | Clip CT to `[-175, 250]` and scale to `[0, 1]`. |
+| Sample patches | Pad small volumes; use a foreground/background sampling ratio of `7:3`. |
+| Augment | Apply spatial flips, rotations, intensity changes, and noise. |
+| Prepare quality inputs | Crop CT and predicted masks with context. Resize CT using linear interpolation and masks using nearest-neighbour interpolation. |
+
+The preprocessing that originally produced the prepared NIfTI directories is external to this repository. Its exact resampling, orientation, and branch-selection procedure is not specified in the checked-in scripts. The before/after illustrations in the README are fixed presentation views; genuine rotations would require their original 3D volumes, meshes, or recorded footage.
+
 ## Repository guide
 
 | File | Purpose |
