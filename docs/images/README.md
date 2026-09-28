@@ -23,4 +23,21 @@ These images were extracted from `ppt/media/` in [HOLA_Viva_Presentation.pptx](.
 
 Both SVGs embed their raster images and have no external image dependencies. The segmentation figure retains its original 945 x 1043 resolution; enlarging it cannot add detail absent from the presentation.
 
-Reported headline values in the root README come from slide 6. The prototype screenshots and complete stopping-policy workflow describe the presentation; their interface implementation is not present in this checkout.
+The root README now focuses on the project and development process. Previous result figures remain as source assets but are not displayed in its walkthrough. The prototype screenshots and complete stopping-policy workflow describe the presentation; their interface implementation is not present in this checkout.
+
+## Animated project walkthrough
+
+The animations explain the project using labels checked against the current scripts. The introduction and preprocessing comparison retain presentation images; the later workflow diagrams use text and icons. They do not show a live model run, measured training progression, or newly generated patient results. They are looping GIFs so the README can display motion without JavaScript. Each new diagram also has a `-still.png` version for readers who prefer a static figure.
+
+| Asset | Source and purpose |
+| --- | --- |
+| `aorta-anatomy.gif` | Original `ppt/media/image2.gif` from slide 2, extracted unchanged. It contains 192 frames showing rotating aortic anatomy. |
+| `segmentation-explained.gif` | CT input and overlay from slide 4, with frames from the slide 2 anatomy animation. The three panels are an explanation; the anatomy is a separate example from the displayed CT. |
+| `hola-feedback.gif` | Progressive reveal of CT input, mask prediction, quality estimation, human review, and separate correction/finish branches. Earlier steps remain visible. |
+| `development-segmentation.gif` | Six-step development flow checked against `SplitPatients.py`, `Train.py`, `aorta_data.py`, and `Clicksim.py`. |
+| `development-quality.gif` | Quality-network workflow checked against `Completeness.py` and `Completeness_classifier.py`, followed by the prototype interaction concept. |
+| `preprocessing-comparison.gif` | Original before/after images from slide 5 revealed in sequence: before image, connecting arrow, then after image. The source images have fixed viewing angles; this is not a 3D turntable render. |
+
+The diagrams were rendered with System.Drawing. Workflow cards and connectors appear progressively, with a four-second pause on the complete flow before restarting. The linked still images show the complete diagrams. The introduction retains its existing animation; source photographs keep their original geometry. The existing before/after images cannot support a faithful new 3D rotation without the corresponding volume, mesh, or recorded turntable footage.
+
+Public dataset source links are listed next to the corresponding rows in the root README. The local `base` cohort's public/private status is not established by the code or slides and is marked unconfirmed.
