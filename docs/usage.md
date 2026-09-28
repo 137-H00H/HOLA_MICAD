@@ -4,6 +4,41 @@
 
 This guide covers configuration and running the existing experiment scripts. Run commands from the repository root.
 
+## Project structure
+
+The code and usage documentation are organized as follows. Image assets are grouped for readability.
+
+```text
+HOLA_MICAD/
+├── README.md                         # Project showcase
+├── core/                             # Shared utilities
+│   ├── aorta_data.py                 # Dataset discovery and loading
+│   └── Clicksim.py                   # Simulated click placement
+├── scripts/
+│   ├── prepare/
+│   │   └── SplitPatients.py          # Create the patient split
+│   ├── train/
+│   │   ├── Train.py                  # Dataset-size ordering
+│   │   ├── TrainR.py                 # Random dataset ordering
+│   │   └── TrainS.py                 # Patient subset experiments
+│   ├── evaluate/
+│   │   ├── EvaluateTest.py           # Segmentation evaluation
+│   │   ├── TargetClick.py            # Corrections to reach target Dice
+│   │   └── ClickQuality.py           # Robustness to incorrect clicks
+│   ├── quality/
+│   │   ├── Completeness.py           # Generate quality-training samples
+│   │   └── Completeness_classifier.py # Train the quality estimator
+│   └── baselines/
+│       ├── Eval_MedSAM.py            # MedSAM baseline
+│       ├── Eval_MedSAM2.py           # MedSAM2 slice evaluation
+│       └── Eval_MedSAM3.py           # MedSAM2 volume propagation
+└── docs/
+    ├── usage.md                      # Setup, commands, and method details
+    └── images/                       # Figures, animations, and stills
+```
+
+Experiment scripts locate the shared utilities in `core/`. The local `core/paths.py` configuration and generated `results/` directory are described below; they are not included in this source layout.
+
 ## Setup
 
 The checkout contains source scripts. Datasets, pretrained weights, dependency locks, and the imported `paths.py` configuration module are not included. Complete the configuration below before running experiments.

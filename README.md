@@ -4,7 +4,7 @@
 
 HOLA combines **3D segmentation, corrective clicks, and quality estimation** to help users inspect aortic masks, refine their boundaries, and decide when to stop.
 
-[Code usage](docs/usage.md) · [Viva presentation](docs/presentations/HOLA_Viva_Presentation.pptx) · [Data availability](#7-data-availability)
+[Code usage](docs/usage.md) · [Data availability](#7-data-availability)
 
 ## Highlights
 
@@ -104,6 +104,6 @@ The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supp
 
 ## Explore the project
 
-[Code usage and setup](docs/usage.md) · [Presentation](docs/presentations/HOLA_Viva_Presentation.pptx) · [Visual sources](docs/images/README.md)
+[Code usage and setup](docs/usage.md) · [Project structure](docs/usage.md#project-structure)
 
 Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
