@@ -98,7 +98,7 @@ The viva lists **357 cases across six cohorts**. These are project cohort counts
 
 | Cohort | Cases | Access |
 | --- | ---: | --- |
-| Base | 43 | Not distributed here; public/private status unconfirmed. |
+| Base | 43 | Private dataset (NIHR) Barts Biomedical Research Centre) |
 | SEGA | 55 | Public: [SEG.A.](https://multicenteraorta.grand-challenge.org/) / [AVT release](https://figshare.com/articles/dataset/Aortic_Vessel_Tree_AVT_CTA_Datasets_and_Segmentations/14806362). |
 | Dissection | 40 | Public: [dataset release](https://figshare.com/articles/dataset/Aortic_Dissection_Dataset_and_Segmentations/22269091). |
 | CIS-UNet | 59 | [Data agreement required](https://github.com/mirthAI/CIS-UNet#accessing-the-dataset). |
@@ -112,3 +112,25 @@ The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supp
 [Research paper (PDF)](docs/HOLA.pdf) · [Code usage and setup](docs/usage.md) · [Project structure](docs/usage.md#project-structure)
 
 Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
+
+## Citation
+
+If you use HOLA in your research and application, please cite our [paper](docs/HOLA.pdf):
+
+## Acknowledgements
+
+This work forms part of the research portfolio of the National Institute for Health and Care Research (NIHR) Barts Biomedical Research Centre (NIHR203330).
+
+## References
+
+The following references support the methods, datasets, and computing resources discussed above. The [HOLA paper](docs/HOLA.pdf) contains the full bibliography.
+
+- **DeepEdit:** Diaz-Pinto et al. *DeepEdit: Deep Editable Learning for Interactive Segmentation of 3D Medical Images.* DALI 2022, pp. 11–21. [Publication](https://doi.org/10.1007/978-3-031-17027-0_2).
+- **MONAI:** Cardoso et al. *MONAI: An open-source framework for deep learning in healthcare.* 2022. [Paper](https://arxiv.org/abs/2211.02701).
+- **CIS-UNet:** Imran et al. *CIS-UNet: Multi-class segmentation of the aorta in computed tomography angiography via context-aware shifted window self-attention.* Computerized Medical Imaging and Graphics, 118, 102470, 2024. [Publication](https://doi.org/10.1016/j.compmedimag.2024.102470).
+- **AVT / SEG.A.:** Radl et al. *AVT: Multicenter aortic vessel tree CTA dataset collection with ground truth segmentation masks.* Data in Brief, 40, 107801, 2022. [Dataset](https://figshare.com/articles/dataset/Aortic_Vessel_Tree_AVT_CTA_Datasets_and_Segmentations/14806362).
+- **Aortic Dissection Dataset:** Mayer et al. *Aortic dissection dataset and segmentations.* 2024. [Dataset](https://doi.org/10.6084/m9.figshare.22269091.v1).
+- **AortaSeg-60:** El Rahal, Rotzinger, and Fahrni. *AortaSeg-60: an open real-world CT-angiography dataset of the aorta with automated segmentation masks and pathological variability.* 2026. [Dataset](https://zenodo.org/records/18147026).
+- **ImageTBAD:** Yao et al. *ImageTBAD: A 3D Computed Tomography Angiography Image Dataset for Automatic Segmentation of Type-B Aortic Dissection.* Frontiers in Physiology, 12, 732711, 2021. [Repository](https://github.com/XiaoweiXu/Dataset_Type-B-Aortic-Dissection).
+- **Apocrita:** King, Butcher, and Zalewski. *Apocrita — High Performance Computing Cluster for Queen Mary University of London.* 2017. [Record](https://doi.org/10.5281/zenodo.438045).
+
