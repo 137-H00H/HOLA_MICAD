@@ -2,6 +2,8 @@
 
 ## Human–AI collaboration for aortic segmentation with quality feedback
 
+**Authors:** Hsu Hlaing Hnin, Emil Gasimov, Laura Bevis, Fuyu Cheng, Elisa Rauseo, Yousaf Bhatti, Khushi Satish Hiremath, Vandhanaa Natarajan Chitra, Caroline Roney, Anthony Mathur, Gregory Slabaugh, and Xu Chen.
+
 [![Research paper PDF](docs/images/badges/research-paper.svg)](docs/HOLA.pdf)
 [![Code usage guide](docs/images/badges/code-usage.svg)](docs/usage.md)
 [![Project structure tree](docs/images/badges/project-structure.svg)](docs/usage.md#project-structure)
