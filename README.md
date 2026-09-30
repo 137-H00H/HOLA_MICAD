@@ -1,6 +1,6 @@
 # HOLA
 
-### Human–AI collaboration for aortic segmentation with quality feedback
+## Human–AI collaboration for aortic segmentation with quality feedback
 
 [![Research paper PDF](docs/images/badges/research-paper.svg)](docs/HOLA.pdf)
 [![Code usage guide](docs/images/badges/code-usage.svg)](docs/usage.md)
