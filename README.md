@@ -39,7 +39,7 @@ HOLA currently learns one **aortic foreground class** from prepared labels; indi
 
 ## 3. The segmentation backbone: MONAI DynUNet
 
-**MONAI provides the framework; DynUNet provides the segmentation architecture.** HOLA trains this 3D encoder–decoder from scratch, using three input channels: **CT, positive clicks, and negative clicks**. Its output separates foreground from background. [Architecture reference](https://docs.monai.io/en/0.5.3/networks.html#dynunet).
+**MONAI provides the framework; DynUNet provides the segmentation architecture.** HOLA trains this 3D encoder–decoder from scratch, using three input channels: **CT, positive clicks, and negative clicks**. Its output separates foreground from background.
 
 ## 4. How HOLA adds human interaction and quality feedback
 
