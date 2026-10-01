@@ -88,8 +88,6 @@ Preparation brings different cohorts into a common CT-and-mask format. The prese
 
 ![The original before image appears first, followed by an arrow and the after image](docs/images/preprocessing-comparison.gif)
 
-*Original fixed views from slide 5. [Still comparison](docs/images/preprocessing-comparison-still.png).*
-
 The code loads prepared NIfTI pairs, merges nonzero labels into one foreground, normalizes CT intensity, and samples augmented patches. Quality training uses aligned CT/mask crops. Earlier dataset preparation is external to this checkout; its exact resampling and branch-selection procedure is not specified. [Implementation details](docs/usage.md#preprocessing-details).
 
 ## 7. Data availability
