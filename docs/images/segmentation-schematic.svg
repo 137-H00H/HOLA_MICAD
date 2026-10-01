@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="360" viewBox="0 0 960 360" role="img" aria-labelledby="title desc">
+<title id="title">From image intensities to a segmentation mask</title>
+<desc id="desc">Original schematic panels show a grey image grid, a binary target mask, and an overlay. Illustrative pixels, not a CT scan or model prediction.</desc>
+<defs>
+<pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0 H0 V24" fill="none" stroke="#f8fafc" stroke-opacity="0.45"/></pattern>
+<g id="scan"><rect width="192" height="168" rx="8" fill="#334155"/><ellipse cx="96" cy="84" rx="79" ry="62" fill="#94a3b8"/><ellipse cx="96" cy="84" rx="58" ry="45" fill="#64748b"/><rect x="72" y="48" width="48" height="48" fill="#e2e8f0"/><rect x="96" y="96" width="24" height="24" fill="#e2e8f0"/></g>
+<g id="mask"><path d="M72 48 H120 V120 H96 V96 H72 Z" fill="#fb7185"/></g>
+<marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#64748b"/></marker>
+</defs>
+<rect width="960" height="360" rx="24" fill="#f8fafc"/>
+<g font-family="Arial, sans-serif" fill="#0f172a">
+<text x="32" y="42" font-size="25" font-weight="bold">Segmentation assigns a label to each voxel</text>
+<g font-size="18" font-weight="bold"><text x="64" y="89">1. Image intensities</text><text x="384" y="89">2. Target mask</text><text x="704" y="89">3. Overlay</text></g>
+<g transform="translate(64 110)"><use href="#scan"/><rect width="192" height="168" fill="url(#grid)"/></g>
+<g transform="translate(384 110)"><rect width="192" height="168" rx="8" fill="#0f172a"/><use href="#mask"/><rect width="192" height="168" fill="url(#grid)"/></g>
+<g transform="translate(704 110)"><use href="#scan"/><use href="#mask" opacity="0.8"/><rect width="192" height="168" fill="url(#grid)"/></g>
+<g stroke="#64748b" stroke-width="2" marker-end="url(#arrow)"><path d="M286 194 H349"/><path d="M606 194 H669"/></g>
+<text x="32" y="325" font-size="15" fill="#475569">Original HOLA schematic · A 2D grid illustrates the idea; HOLA labels voxels throughout a 3D volume.</text>
+</g></svg>
