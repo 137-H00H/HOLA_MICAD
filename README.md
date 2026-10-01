@@ -113,10 +113,6 @@ The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supp
 
 Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
 
-## Citation
-
-If you use HOLA in your research and application, please cite our [paper](docs/HOLA.pdf):
-
 ## Acknowledgements
 
 This work forms part of the research portfolio of the National Institute for Health and Care Research (NIHR) Barts Biomedical Research Centre (NIHR203330).
