@@ -1,8 +1,10 @@
 # HOLA
 
-## Human–AI collaboration for aortic segmentation with quality feedback
-
 **Authors:** Hsu Hlaing Hnin, Emil Gasimov, Laura Bevis, Fuyu Cheng, Elisa Rauseo, Yousaf Bhatti, Khushi Satish Hiremath, Vandhanaa Natarajan Chitra, Caroline Roney, Anthony Mathur, Gregory Slabaugh, and Xu Chen.
+
+**Source code will be released soon.**
+
+### Human–AI collaboration for aortic segmentation with quality feedback
 
 [![Research paper PDF](docs/images/badges/research-paper.svg)](docs/HOLA.pdf)
 [![Code usage guide](docs/images/badges/code-usage.svg)](docs/usage.md)
@@ -21,16 +23,14 @@ HOLA combines **3D segmentation, corrective clicks, and quality estimation** to 
 
 Segmentation labels each **voxel**, the 3D equivalent of a pixel, as target anatomy or background. Together, these labels form a **mask** that can be overlaid on CT slices or viewed in 3D.
 
-![Animated explanation of a CT scan, a segmentation overlay, and a 3D structure](docs/images/segmentation-explained.gif)
-
-*The rotating anatomy is a separate illustration from the CT example. [Still image](docs/images/segmentation-explained-still.png).*
+![CT scan, segmentation overlay, and a static aorta illustration](docs/images/segmentation-intro.gif)
 
 ## 2. What are we segmenting? The aorta
 
 The **aorta** carries blood from the heart to the body. Its curved shape, branching vessels, and variable anatomy make consistent segmentation across slices challenging.
 
 <p align="center">
-<img src="docs/images/aorta-anatomy.gif" alt="Rotating aortic anatomy from the viva presentation" width="250">
+<img src="docs/images/aorta-transparent.png" alt="Static crimson aorta illustration with a transparent background" width="240">
 </p>
 
 ![Aortic overlays at three levels of a CT volume](docs/images/axial-segmentation-examples.png)
@@ -49,7 +49,7 @@ HOLA connects prediction to **human review and correction**. A separate CNN esti
 
 [View the complete flowchart](docs/images/hola-feedback-still.png).
 
-Building on interactive methods such as [DeepEdit](https://docs.monai.io/en/1.4.0/applications.html), HOLA combines **click-driven volumetric segmentation with quality estimation and stopping feedback**.
+Building on [DeepEdit (Diaz-Pinto et al., 2022)](https://doi.org/10.1007/978-3-031-17027-0_2), HOLA combines **click-driven volumetric segmentation with quality estimation and stopping feedback**.
 
 <details>
 <summary><strong>See the prototype interface</strong></summary>
@@ -86,7 +86,7 @@ The scripts implement training and evaluation; the viva demonstrates the complet
 
 Preparation brings different cohorts into a common CT-and-mask format. The presentation illustrates the aortic target before and after preprocessing:
 
-![The original before image appears first, followed by an arrow and the after image](docs/images/preprocessing-comparison.gif)
+![Before and after preprocessing shown together in a static comparison](docs/images/preprocessing-comparison-still.png)
 
 The code loads prepared NIfTI pairs, merges nonzero labels into one foreground, normalizes CT intensity, and samples augmented patches. Quality training uses aligned CT/mask crops. Earlier dataset preparation is external to this checkout; its exact resampling and branch-selection procedure is not specified. [Implementation details](docs/usage.md#preprocessing-details).
 
@@ -96,10 +96,10 @@ The viva lists **357 cases across six cohorts**. These are project cohort counts
 
 | Cohort | Cases | Access |
 | --- | ---: | --- |
-| Base | 43 | Private dataset (NIHR) Barts Biomedical Research Centre) |
+| Base | 43 | Not distributed here; public/private status unconfirmed. |
 | SEGA | 55 | Public: [SEG.A.](https://multicenteraorta.grand-challenge.org/) / [AVT release](https://figshare.com/articles/dataset/Aortic_Vessel_Tree_AVT_CTA_Datasets_and_Segmentations/14806362). |
 | Dissection | 40 | Public: [dataset release](https://figshare.com/articles/dataset/Aortic_Dissection_Dataset_and_Segmentations/22269091). |
-| CIS-UNet | 59 | [Data agreement required](https://github.com/mirthAI/CIS-UNet#accessing-the-dataset). |
+| CIS-UNet | 59 | Public research dataset: [CIS-UNet GitHub and access instructions](https://github.com/mirthAI/CIS-UNet#accessing-the-dataset). |
 | AortaSeg60 | 60 | Public: [Zenodo](https://zenodo.org/records/18147026); automated masks. |
 | TBAD | 100 | Public: [ImageTBAD](https://github.com/XiaoweiXu/Dataset_Type-B-Aortic-Dissection), distributed through Kaggle. |
 
@@ -111,11 +111,36 @@ The upstream AVT release contains 56 scans; the project uses 55. AortaSeg60 supp
 
 Datasets, trained weights, external preprocessing code, and prototype interface source are not included.
 
+## Citation
+
+If you use HOLA in your research, please cite our [paper](docs/HOLA.pdf):
+
+```bibtex
+@misc{hnin_hola,
+  title = {{HOLA}: Towards Holistic Human--AI Collaborative Framework for Interactive Aortic {CTA} Segmentation and Quality Assessment},
+  author = {{Hsu Hlaing Hnin} and Emil Gasimov and Laura Bevis and Fuyu Cheng and Elisa Rauseo and Yousaf Bhatti and Khushi Satish Hiremath and Vandhanaa Natarajan Chitra and Caroline Roney and Anthony Mathur and Gregory Slabaugh and Xu Chen},
+  howpublished = {Manuscript available in the HOLA repository},
+  url = {https://github.com/137-H00H/HOLA_MICAD/blob/master/docs/HOLA.pdf}
+}
+```
+
+This entry uses the title and author order in the repository manuscript. Publication year, venue, and DOI will be added when confirmed.
+
 ## Acknowledgements
 
-This work forms part of the research portfolio of the National Institute for Health and Care Research (NIHR) Barts Biomedical Research Centre (NIHR203330).
+We thank the developers of [MONAI](https://github.com/Project-MONAI/MONAI), [DeepEdit and MONAI Label](https://github.com/Project-MONAI/MONAILabel), and [Streamlit](https://streamlit.io/) for the tools and methods supporting this work. We also acknowledge the authors and data contributors of AVT/SEG.A., the Aortic Dissection Dataset, CIS-UNet, AortaSeg-60, and ImageTBAD; their source links and access conditions are listed under [Data availability](#7-data-availability).
 
-## References
+As reported in our paper, model training used Queen Mary University of London's [Apocrita high performance computing cluster](https://doi.org/10.5281/zenodo.438045).
+
+### Figure credits
+
+The crimson aorta illustration was supplied by the project author; its background was removed with imagegen. Both introductory visuals use the static cutout; section 2 displays it with a transparent background. The CT panels use the existing HOLA presentation images.
+
+The earlier rotating aorta illustration in the viva presentation and `docs/images/aorta-anatomy.gif` is credited to **Imran et al., CIS-UNet (2024)** ([paper](https://doi.org/10.1016/j.compmedimag.2024.102470), [repository](https://github.com/mirthAI/CIS-UNet)). The previous `segmentation-explained.gif` and its still image also incorporate that illustration. These legacy assets remain in the repository but are no longer displayed in this README. Their figure-specific reuse terms have not been confirmed; this attribution does not establish permission to redistribute them.
+
+Other CT examples and prototype screenshots are extracted from the HOLA viva presentation. See the [asset provenance notes](docs/images/README.md) for their sources. Dataset access conditions and third-party rights remain with their respective providers.
+
+## Selected references
 
 The following references support the methods, datasets, and computing resources discussed above. The [HOLA paper](docs/HOLA.pdf) contains the full bibliography.
 
@@ -127,4 +152,3 @@ The following references support the methods, datasets, and computing resources 
 - **AortaSeg-60:** El Rahal, Rotzinger, and Fahrni. *AortaSeg-60: an open real-world CT-angiography dataset of the aorta with automated segmentation masks and pathological variability.* 2026. [Dataset](https://zenodo.org/records/18147026).
 - **ImageTBAD:** Yao et al. *ImageTBAD: A 3D Computed Tomography Angiography Image Dataset for Automatic Segmentation of Type-B Aortic Dissection.* Frontiers in Physiology, 12, 732711, 2021. [Repository](https://github.com/XiaoweiXu/Dataset_Type-B-Aortic-Dissection).
 - **Apocrita:** King, Butcher, and Zalewski. *Apocrita — High Performance Computing Cluster for Queen Mary University of London.* 2017. [Record](https://doi.org/10.5281/zenodo.438045).
-
